@@ -85,8 +85,14 @@ function extractName(text) {
 
 // Extraer monto de la factura
 function extractAmount(text) {
-  const match = text.match(/\$(\d+)/);
-  return match ? parseInt(match[1]) : 0;
+  // Buscar patrón $número
+  const match = text.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+  if (match) {
+    // Remover comas y convertir a número
+    const amount = parseInt(match[1].replace(/,/g, ''));
+    return amount;
+  }
+  return 0;
 }
 
 // Procesar mensaje de log
@@ -279,6 +285,31 @@ client.on('messageCreate', async (message) => {
     
     await message.reply({ embeds: [embed] });
   }
+  
+  // !testlog - Probar procesamiento de un log manualmente
+  if (command === 'testlog') {
+    const testMessage = args.slice(1).join(' ');
+    if (!testMessage) {
+      return message.reply('❌ Uso: `!testlog Alguien ha pagado una factura $430 de [GHX54509]`');
+    }
+    
+    // Crear un objeto simulado de mensaje
+    const mockMessage = {
+      content: testMessage,
+      author: message.author,
+      channel: message.channel
+    };
+    
+    await message.reply(`🧪 Probando procesamiento del siguiente log:\n\`\`\`${testMessage}\`\`\``);
+    
+    const result = processLogMessage(mockMessage);
+    
+    if (result) {
+      await message.channel.send('✅ **Log procesado correctamente!** La venta fue registrada. Usa `!reporte` para verificar.');
+    } else {
+      await message.channel.send('❌ **No se pudo procesar el log.** Verifica el formato. Debe contener "ha pagado una factura", un monto con $ y un DNI entre corchetes [ABC12345].');
+    }
+  }
 
   // !leer - Leer mensajes históricos
   if (command === 'leer') {
@@ -360,11 +391,15 @@ client.on('messageCreate', async (message) => {
       // Procesar mensajes en orden cronológico (más antiguos primero)
       messagesToProcess.reverse();
       
+      console.log(`📚 Procesando ${messagesToProcess.length} mensajes...`);
+      
       for (const msg of messagesToProcess) {
         if (processLogMessage(msg)) {
           processed++;
         }
       }
+      
+      console.log(`✅ Procesamiento completo: ${processed} ventas encontradas`);
 
       const embed = new Discord.EmbedBuilder()
         .setColor('#00FF00')
@@ -377,7 +412,15 @@ client.on('messageCreate', async (message) => {
         .setTimestamp();
 
       await message.channel.send({ embeds: [embed] });
-      await message.channel.send('💡 Usa `!reporte` para ver el resumen actualizado.');
+      
+      // Mostrar un preview de empleados registrados
+      if (processed > 0) {
+        const employeeCount = Object.keys(employeeSales).length;
+        const totalSales = Object.values(employeeSales).reduce((sum, emp) => sum + emp.sales, 0);
+        await message.channel.send(`📊 **Resumen:** ${employeeCount} empleado(s) con ventas totales de ${totalSales.toLocaleString('es-AR')}`);
+      }
+      
+      await message.channel.send('💡 Usa `!reporte` para ver el resumen detallado.');
 
     } catch (error) {
       console.error('Error al leer logs históricos:', error);
@@ -392,6 +435,7 @@ client.on('messageCreate', async (message) => {
       .setTitle('📋 Comandos del Bot de Bonos')
       .addFields(
         { name: '!test / !ping', value: 'Verifica que el bot esté funcionando' },
+        { name: '!testlog <mensaje>', value: '🧪 Prueba el procesamiento de un log manualmente' },
         { name: '!reporte', value: 'Muestra el reporte actual de ventas y bonos' },
         { name: '!cerrar', value: '🔒 Cierra la semana, muestra reporte y resetea datos (Admin)' },
         { name: '!porcentaje <número>', value: '🔒 Cambia el porcentaje de bono (Admin)' },
