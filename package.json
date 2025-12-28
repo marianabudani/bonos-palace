@@ -1,0 +1,15 @@
+{
+  "name": "bonos-palace",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "Mariana Budani",
+  "type": "commonjs",
+  "main": "bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "discord.js": "^14.25.1"
+  }
+}
