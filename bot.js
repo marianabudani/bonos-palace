@@ -197,7 +197,11 @@ client.on('messageCreate', async (message) => {
   
   // Procesar logs automáticamente desde el canal logs🎫
   if (message.channel.name === CONFIG.logsChannelName) {
-    processLogMessage(message);
+    console.log(`📝 Mensaje detectado en ${CONFIG.logsChannelName}: ${message.content.substring(0, 50)}...`);
+    const processed = processLogMessage(message);
+    if (processed) {
+      console.log(`✅ Venta procesada correctamente`);
+    }
     return;
   }
   
@@ -205,6 +209,8 @@ client.on('messageCreate', async (message) => {
   if (message.channel.name !== CONFIG.bonusChannelName) return;
   
   if (!message.content.startsWith('!')) return;
+  
+  console.log(`🎮 Comando recibido: ${message.content}`);
   
   const args = message.content.slice(1).trim().split(/ +/);
   const command = args[0].toLowerCase();
@@ -243,6 +249,24 @@ client.on('messageCreate', async (message) => {
     await message.reply(`✅ Porcentaje de bono actualizado a **${newPercentage}%**`);
   }
   
+  // !test - Comando de diagnóstico
+  if (command === 'test' || command === 'ping') {
+    const embed = new Discord.EmbedBuilder()
+      .setColor('#00D9FF')
+      .setTitle('🔍 Estado del Bot')
+      .addFields(
+        { name: '✅ Estado', value: 'Online y funcionando', inline: true },
+        { name: '📺 Canal Logs', value: CONFIG.logsChannelName, inline: true },
+        { name: '💰 Canal Bonos', value: CONFIG.bonusChannelName, inline: true },
+        { name: '📊 Porcentaje', value: `${CONFIG.bonusPercentage}%`, inline: true },
+        { name: '👥 Empleados Registrados', value: `${Object.keys(employeeSales).length}`, inline: true },
+        { name: '📅 Inicio Semana', value: weekStartDate.toLocaleDateString('es-AR'), inline: true }
+      )
+      .setTimestamp();
+    
+    await message.reply({ embeds: [embed] });
+  }
+
   // !leer - Leer mensajes históricos
   if (command === 'leer') {
     if (!message.member.permissions.has(Discord.PermissionFlagsBits.Administrator)) {
@@ -354,6 +378,7 @@ client.on('messageCreate', async (message) => {
       .setColor('#00D9FF')
       .setTitle('📋 Comandos del Bot de Bonos')
       .addFields(
+        { name: '!test / !ping', value: 'Verifica que el bot esté funcionando' },
         { name: '!reporte', value: 'Muestra el reporte actual de ventas y bonos' },
         { name: '!cerrar', value: '🔒 Cierra la semana, muestra reporte y resetea datos (Admin)' },
         { name: '!porcentaje <número>', value: '🔒 Cambia el porcentaje de bono (Admin)' },
@@ -390,13 +415,38 @@ function scheduleWeeklyClose() {
 }
 
 // Iniciar bot
-client.once('ready', () => {
+client.once(Discord.Events.ClientReady, async () => {
   console.log(`✅ Bot iniciado como ${client.user.tag}`);
   console.log(`📺 Leyendo logs de: ${CONFIG.logsChannelName}`);
   console.log(`💰 Comandos en: ${CONFIG.bonusChannelName}`);
   console.log(`📊 Porcentaje de bono: ${CONFIG.bonusPercentage}%`);
   loadData();
   scheduleWeeklyClose();
+  
+  // Enviar mensaje de confirmación al canal de bonos
+  try {
+    const bonusChannel = client.channels.cache.find(ch => ch.name === CONFIG.bonusChannelName);
+    if (bonusChannel) {
+      const startEmbed = new Discord.EmbedBuilder()
+        .setColor('#00FF00')
+        .setTitle('🤖 Bot de Bonos Online')
+        .setDescription('El bot está activo y monitoreando el canal de logs.')
+        .addFields(
+          { name: '📺 Canal de Logs', value: CONFIG.logsChannelName, inline: true },
+          { name: '📊 Porcentaje de Bono', value: `${CONFIG.bonusPercentage}%`, inline: true },
+          { name: '⏰ Cierre Automático', value: 'Domingos 23:00 hs', inline: true }
+        )
+        .setFooter({ text: 'Usa !ayuda para ver los comandos disponibles' })
+        .setTimestamp();
+      
+      await bonusChannel.send({ embeds: [startEmbed] });
+      console.log('✉️ Mensaje de inicio enviado al canal de bonos');
+    } else {
+      console.warn(`⚠️ No se encontró el canal: ${CONFIG.bonusChannelName}`);
+    }
+  } catch (error) {
+    console.error('Error al enviar mensaje de inicio:', error);
+  }
 });
 
 // Manejo de errores
