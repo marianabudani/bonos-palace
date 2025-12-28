@@ -7,8 +7,8 @@ const path = require('path');
 // Configuración desde variables de entorno
 const CONFIG = {
   token: process.env.DISCORD_TOKEN,
-  logsChannelName: process.env.LOGS_CHANNEL || 'logs🎫',
-  bonusChannelName: process.env.BONUS_CHANNEL || '💰┆calculo-bonos',
+  logsChannelId: process.env.LOGS_CHANNEL_ID, // Ahora usa ID
+  bonusChannelId: process.env.BONUS_CHANNEL_ID, // Ahora usa ID
   bonusPercentage: parseInt(process.env.BONUS_PERCENTAGE) || 20,
   timezone: process.env.TIMEZONE || 'America/Argentina/Buenos_Aires'
 };
@@ -16,6 +16,16 @@ const CONFIG = {
 // Validar configuración
 if (!CONFIG.token) {
   console.error('❌ ERROR: DISCORD_TOKEN no está configurado en las variables de entorno');
+  process.exit(1);
+}
+
+if (!CONFIG.logsChannelId) {
+  console.error('❌ ERROR: LOGS_CHANNEL_ID no está configurado en las variables de entorno');
+  process.exit(1);
+}
+
+if (!CONFIG.bonusChannelId) {
+  console.error('❌ ERROR: BONUS_CHANNEL_ID no está configurado en las variables de entorno');
   process.exit(1);
 }
 
@@ -195,9 +205,9 @@ function resetWeek() {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   
-  // Procesar logs automáticamente desde el canal logs🎫
-  if (message.channel.name === CONFIG.logsChannelName) {
-    console.log(`📝 Mensaje detectado en ${CONFIG.logsChannelName}: ${message.content.substring(0, 50)}...`);
+  // Procesar logs automáticamente desde el canal de logs
+  if (message.channel.id === CONFIG.logsChannelId) {
+    console.log(`📝 Mensaje detectado en canal logs: ${message.content.substring(0, 50)}...`);
     const processed = processLogMessage(message);
     if (processed) {
       console.log(`✅ Venta procesada correctamente`);
@@ -205,8 +215,8 @@ client.on('messageCreate', async (message) => {
     return;
   }
   
-  // Comandos solo funcionan en el canal 💰┆calculo-bonos
-  if (message.channel.name !== CONFIG.bonusChannelName) return;
+  // Comandos solo funcionan en el canal de bonos
+  if (message.channel.id !== CONFIG.bonusChannelId) return;
   
   if (!message.content.startsWith('!')) return;
   
@@ -251,13 +261,16 @@ client.on('messageCreate', async (message) => {
   
   // !test - Comando de diagnóstico
   if (command === 'test' || command === 'ping') {
+    const logsChannel = client.channels.cache.get(CONFIG.logsChannelId);
+    const bonusChannel = client.channels.cache.get(CONFIG.bonusChannelId);
+    
     const embed = new Discord.EmbedBuilder()
       .setColor('#00D9FF')
       .setTitle('🔍 Estado del Bot')
       .addFields(
         { name: '✅ Estado', value: 'Online y funcionando', inline: true },
-        { name: '📺 Canal Logs', value: CONFIG.logsChannelName, inline: true },
-        { name: '💰 Canal Bonos', value: CONFIG.bonusChannelName, inline: true },
+        { name: '📺 Canal Logs', value: logsChannel ? `#${logsChannel.name}` : '❌ No encontrado', inline: true },
+        { name: '💰 Canal Bonos', value: bonusChannel ? `#${bonusChannel.name}` : '❌ No encontrado', inline: true },
         { name: '📊 Porcentaje', value: `${CONFIG.bonusPercentage}%`, inline: true },
         { name: '👥 Empleados Registrados', value: `${Object.keys(employeeSales).length}`, inline: true },
         { name: '📅 Inicio Semana', value: weekStartDate.toLocaleDateString('es-AR'), inline: true }
@@ -280,7 +293,7 @@ client.on('messageCreate', async (message) => {
       return message.reply('❌ Uso: `!leer fecha DD/MM/YYYY` o `!leer cantidad 100`');
     }
 
-    const logsChannel = client.channels.cache.find(ch => ch.name === CONFIG.logsChannelName);
+    const logsChannel = client.channels.cache.find(ch => ch.id === CONFIG.logsChannelId);
     if (!logsChannel) {
       return message.reply('❌ No se encontró el canal de logs.');
     }
@@ -402,8 +415,8 @@ function scheduleWeeklyClose() {
     if (argTime.getDay() === 0 && argTime.getHours() === 23 && argTime.getMinutes() === 0) {
       console.log('⏰ Cierre automático semanal');
       
-      // Buscar el canal por nombre
-      const channel = client.channels.cache.find(ch => ch.name === CONFIG.bonusChannelName);
+      // Buscar el canal por ID
+      const channel = client.channels.cache.get(CONFIG.bonusChannelId);
       if (channel) {
         const embed = generateReport();
         channel.send({ embeds: [embed] });
@@ -417,22 +430,27 @@ function scheduleWeeklyClose() {
 // Iniciar bot
 client.once(Discord.Events.ClientReady, async () => {
   console.log(`✅ Bot iniciado como ${client.user.tag}`);
-  console.log(`📺 Leyendo logs de: ${CONFIG.logsChannelName}`);
-  console.log(`💰 Comandos en: ${CONFIG.bonusChannelName}`);
+  
+  // Obtener información de los canales
+  const logsChannel = client.channels.cache.get(CONFIG.logsChannelId);
+  const bonusChannel = client.channels.cache.get(CONFIG.bonusChannelId);
+  
+  console.log(`📺 Leyendo logs de: ${logsChannel ? `#${logsChannel.name} (${CONFIG.logsChannelId})` : `❌ Canal no encontrado (${CONFIG.logsChannelId})`}`);
+  console.log(`💰 Comandos en: ${bonusChannel ? `#${bonusChannel.name} (${CONFIG.bonusChannelId})` : `❌ Canal no encontrado (${CONFIG.bonusChannelId})`}`);
   console.log(`📊 Porcentaje de bono: ${CONFIG.bonusPercentage}%`);
+  
   loadData();
   scheduleWeeklyClose();
   
   // Enviar mensaje de confirmación al canal de bonos
   try {
-    const bonusChannel = client.channels.cache.find(ch => ch.name === CONFIG.bonusChannelName);
     if (bonusChannel) {
       const startEmbed = new Discord.EmbedBuilder()
         .setColor('#00FF00')
         .setTitle('🤖 Bot de Bonos Online')
         .setDescription('El bot está activo y monitoreando el canal de logs.')
         .addFields(
-          { name: '📺 Canal de Logs', value: CONFIG.logsChannelName, inline: true },
+          { name: '📺 Canal de Logs', value: logsChannel ? `<#${CONFIG.logsChannelId}>` : '❌ No encontrado', inline: true },
           { name: '📊 Porcentaje de Bono', value: `${CONFIG.bonusPercentage}%`, inline: true },
           { name: '⏰ Cierre Automático', value: 'Domingos 23:00 hs', inline: true }
         )
@@ -442,7 +460,7 @@ client.once(Discord.Events.ClientReady, async () => {
       await bonusChannel.send({ embeds: [startEmbed] });
       console.log('✉️ Mensaje de inicio enviado al canal de bonos');
     } else {
-      console.warn(`⚠️ No se encontró el canal: ${CONFIG.bonusChannelName}`);
+      console.warn(`⚠️ No se encontró el canal de bonos con ID: ${CONFIG.bonusChannelId}`);
     }
   } catch (error) {
     console.error('Error al enviar mensaje de inicio:', error);
