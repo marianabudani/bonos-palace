@@ -7,8 +7,8 @@ const path = require('path');
 // Configuración desde variables de entorno
 const CONFIG = {
   token: process.env.DISCORD_TOKEN,
-  logsChannelName: process.env.LOGS_CHANNEL_NAME || 'logs🎫',
-  bonusChannelName: process.env.BONUS_CHANNEL_NAME || '💰┆calculo-bonos',
+  logsChannelName: process.env.LOGS_CHANNEL || 1407132507656294541,
+  bonusChannelName: process.env.BONUS_CHANNEL || 1408488471026339985,
   bonusPercentage: parseInt(process.env.BONUS_PERCENTAGE) || 20,
   timezone: process.env.TIMEZONE || 'America/Argentina/Buenos_Aires'
 };
