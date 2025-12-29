@@ -73,20 +73,32 @@ function saveData() {
 
 // Extraer DNI del formato [ABC12345]
 function extractDNI(text) {
-  const match = text.match(/\[([A-Z]{3}\d{5})\]/);
-  return match ? match[1] : null;
+  // Remover formato de Discord (**, `, etc.)
+  const cleanText = text.replace(/\*\*/g, '').replace(/`/g, '');
+  
+  // Buscar patrón [3 letras + 5 números]
+  const match = cleanText.match(/\[([A-Z]{3}\d{5})\]/i);
+  return match ? match[1].toUpperCase() : null;
 }
 
 // Extraer nombre del empleado
 function extractName(text) {
-  const match = text.match(/\[([A-Z]{3}\d{5})\]\s+([^h]+)/);
-  return match ? match[2].trim() : null;
+  // Remover formato de Discord
+  const cleanText = text.replace(/\*\*/g, '').replace(/`/g, '');
+  
+  // Buscar patrón [DNI] Nombre ha retirado/guardado/enviado
+  const match = cleanText.match(/\[[A-Z]{3}\d{5}\]\s+([^h]+?)(?:\s+ha\s+(?:retirado|guardado|enviado))/i);
+  return match ? match[1].trim() : null;
 }
 
 // Extraer monto de la factura
 function extractAmount(text) {
-  // Buscar patrón $número
-  const match = text.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+  // Remover formato de Discord
+  const cleanText = text.replace(/\*\*/g, '').replace(/`/g, '');
+  
+  // Buscar patrón $número (puede tener comas y texto después entre paréntesis)
+  // Ejemplos: $430, $1,500, $430 (descripción)
+  const match = cleanText.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
   if (match) {
     // Remover comas y convertir a número
     const amount = parseInt(match[1].replace(/,/g, ''));
