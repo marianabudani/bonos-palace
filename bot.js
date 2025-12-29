@@ -73,37 +73,65 @@ function saveData() {
 
 // Extraer DNI del formato [ABC12345]
 function extractDNI(text) {
-  // Remover formato de Discord (**, `, etc.)
-  const cleanText = text.replace(/\*\*/g, '').replace(/`/g, '');
+  // Remover TODO tipo de formato de Discord
+  const cleanText = text.replace(/\*\*/g, '')
+                        .replace(/`/g, '')
+                        .replace(/\*/g, '')
+                        .replace(/_/g, '')
+                        .replace(/~/g, '');
   
-  // Buscar patrón [3 letras + 5 números]
-  const match = cleanText.match(/\[([A-Z]{3}\d{5})\]/i);
-  return match ? match[1].toUpperCase() : null;
+  // Buscar patrón [3 letras + 5 números] con o sin espacios
+  const match = cleanText.match(/\[\s*([A-Z]{3}\s*\d{5})\s*\]/i);
+  if (match) {
+    // Remover espacios internos y convertir a mayúsculas
+    const dni = match[1].replace(/\s/g, '').toUpperCase();
+    console.log(`   🆔 DNI encontrado: "${match[0]}" → ${dni}`);
+    return dni;
+  }
+  
+  console.log(`   ❌ No se encontró DNI en formato [ABC12345] en: "${cleanText}"`);
+  return null;
 }
 
 // Extraer nombre del empleado
 function extractName(text) {
-  // Remover formato de Discord
-  const cleanText = text.replace(/\*\*/g, '').replace(/`/g, '');
+  // Remover TODO tipo de formato de Discord
+  const cleanText = text.replace(/\*\*/g, '')
+                        .replace(/`/g, '')
+                        .replace(/\*/g, '')
+                        .replace(/_/g, '')
+                        .replace(/~/g, '');
   
   // Buscar patrón [DNI] Nombre ha retirado/guardado/enviado
-  const match = cleanText.match(/\[[A-Z]{3}\d{5}\]\s+([^h]+?)(?:\s+ha\s+(?:retirado|guardado|enviado))/i);
-  return match ? match[1].trim() : null;
+  const match = cleanText.match(/\[\s*[A-Z]{3}\s*\d{5}\s*\]\s+([^h]+?)(?:\s+ha\s+(?:retirado|guardado|enviado))/i);
+  if (match) {
+    const name = match[1].trim();
+    console.log(`   👤 Nombre encontrado: "${name}"`);
+    return name;
+  }
+  return null;
 }
 
 // Extraer monto de la factura
 function extractAmount(text) {
-  // Remover formato de Discord
-  const cleanText = text.replace(/\*\*/g, '').replace(/`/g, '');
+  // Remover TODO tipo de formato de Discord y caracteres especiales
+  const cleanText = text.replace(/\*\*/g, '')
+                        .replace(/`/g, '')
+                        .replace(/\*/g, '')
+                        .replace(/_/g, '')
+                        .replace(/~/g, '');
   
-  // Buscar patrón $número (puede tener comas y texto después entre paréntesis)
-  // Ejemplos: $430, $1,500, $430 (descripción)
-  const match = cleanText.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+  // Buscar patrón $número con o sin comas, puede tener descripción después
+  // Ejemplos: $430, $1,500, $430 (descripción), $430(descripción)
+  const match = cleanText.match(/\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/);
   if (match) {
     // Remover comas y convertir a número
     const amount = parseInt(match[1].replace(/,/g, ''));
+    console.log(`   💲 Monto encontrado: "${match[0]}" → ${amount}`);
     return amount;
   }
+  
+  console.log(`   ❌ No se encontró monto en: "${cleanText}"`);
   return 0;
 }
 
