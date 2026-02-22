@@ -71,10 +71,10 @@ function cleanText(text) {
              .trim();
 }
 
-// Extraer DNI
+// Extraer DNI (acepta 8 caracteres alfanuméricos)
 function extractDNI(text) {
   const cleanedText = cleanText(text);
-  const match = cleanedText.match(/\[\s*([A-Z]{3}\s*\d{5})\s*\]/i);
+  const match = cleanedText.match(/\[\s*([A-Z0-9]{8})\s*\]/i);
   if (match) {
     return match[1].replace(/\s/g, '').toUpperCase();
   }
@@ -84,7 +84,7 @@ function extractDNI(text) {
 // Extraer nombre
 function extractName(text) {
   const cleanedText = cleanText(text);
-  const match = cleanedText.match(/\[\s*[A-Z]{3}\s*\d{5}\s*\]\s+([^h]+?)(?:\s+ha\s+(?:retirado|guardado|enviado))/i);
+  const match = cleanedText.match(/\[\s*[A-Z0-9]{8}\s*\]\s+([^h]+?)(?:\s+ha\s+(?:retirado|guardado|enviado))/i);
   if (match) {
     return match[1].trim();
   }
@@ -120,6 +120,13 @@ function processLog(message) {
           name: dni,
           sales: []
         };
+      }
+      
+      // Evitar duplicados
+      const alreadyProcessed = employees[dni].sales.some(sale => sale.messageId === message.id);
+      if (alreadyProcessed) {
+        console.log(`⚠️ Venta duplicada ignorada: ${dni} - $${amount}`);
+        return false;
       }
       
       // Agregar venta
@@ -297,6 +304,94 @@ client.on('messageCreate', async (message) => {
     await message.reply({ embeds: [embed] });
   }
   
+  // !empleados
+  if (command === 'empleados') {
+    if (Object.keys(employees).length === 0) {
+      return message.reply('❌ No hay empleados registrados.');
+    }
+    
+    const results = calculateTotals();
+    
+    const embed = new Discord.EmbedBuilder()
+      .setColor('#00D9FF')
+      .setTitle('👥 LISTA DE EMPLEADOS')
+      .setDescription(`Total: ${results.length} empleado(s)`)
+      .setTimestamp();
+    
+    let list = '';
+    results.forEach((emp) => {
+      const icon = emp.totalSales > 0 ? '✅' : '⚪';
+      list += `${icon} **${emp.name}** (${emp.dni})\n`;
+      list += `   └ ${emp.salesCount} venta(s) | $${emp.totalSales.toLocaleString('es-AR')} | Bono: $${emp.bonus.toLocaleString('es-AR')}\n\n`;
+    });
+    
+    if (list.length > 1024) {
+      const chunks = list.match(/[\s\S]{1,1024}/g) || [];
+      chunks.forEach((chunk, i) => {
+        embed.addFields({
+          name: i === 0 ? '📋 Empleados' : '​',
+          value: chunk,
+          inline: false
+        });
+      });
+    } else {
+      embed.addFields({
+        name: '📋 Empleados',
+        value: list,
+        inline: false
+      });
+    }
+    
+    await message.reply({ embeds: [embed] });
+  }
+  
+  // !empleado
+  if (command === 'empleado') {
+    const dni = args[1]?.toUpperCase();
+    
+    if (!dni) {
+      return message.reply('❌ Uso: `!empleado <DNI>`\nEjemplo: `!empleado OA1EU67B`');
+    }
+    
+    const employee = employees[dni];
+    
+    if (!employee) {
+      return message.reply(`❌ No se encontró al empleado con DNI: ${dni}`);
+    }
+    
+    const totalSales = employee.sales.reduce((sum, s) => sum + s.amount, 0);
+    const bonus = Math.round(totalSales * (CONFIG.bonusPercentage / 100));
+    
+    const embed = new Discord.EmbedBuilder()
+      .setColor('#FFD700')
+      .setTitle(`👤 ${employee.name}`)
+      .setDescription(`**DNI:** ${dni}`)
+      .addFields(
+        { name: '💰 Total Ventas', value: `$${totalSales.toLocaleString('es-AR')}`, inline: true },
+        { name: '🎁 Bono', value: `$${bonus.toLocaleString('es-AR')}`, inline: true },
+        { name: '📊 Cantidad', value: `${employee.sales.length} venta(s)`, inline: true }
+      )
+      .setTimestamp();
+    
+    if (employee.sales.length > 0) {
+      let salesList = '';
+      const recentSales = employee.sales.slice(-10).reverse();
+      
+      recentSales.forEach(sale => {
+        const date = new Date(sale.date);
+        salesList += `• $${sale.amount} - ${date.toLocaleDateString('es-AR')} ${date.toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'})}\n`;
+      });
+      
+      embed.addFields({
+        name: `📝 Últimas ${recentSales.length} ventas`,
+        value: salesList,
+        inline: false
+      });
+    }
+    
+    await message.reply({ embeds: [embed] });
+  }
+  
   // !leer
   if (command === 'leer') {
     if (!message.member.permissions.has(Discord.PermissionFlagsBits.Administrator)) {
@@ -363,7 +458,6 @@ client.on('messageCreate', async (message) => {
         lastId = msgs.last().id;
       }
 
-      // Procesar en orden cronológico
       messagesToProcess.reverse();
       
       console.log(`📚 Procesando ${messagesToProcess.length} mensajes...`);
@@ -411,6 +505,30 @@ client.on('messageCreate', async (message) => {
     resetWeek();
   }
   
+  // !resetdata
+  if (command === 'resetdata') {
+    if (!message.member.permissions.has(Discord.PermissionFlagsBits.Administrator)) {
+      return message.reply('❌ Solo administradores.');
+    }
+    
+    await message.reply('⚠️ **ADVERTENCIA:** Esto borrará TODOS los datos.\nEscribe `!confirmar` en 30 segundos.');
+    
+    const filter = m => m.author.id === message.author.id && m.content === '!confirmar';
+    
+    try {
+      await message.channel.awaitMessages({ filter, max: 1, time: 30000, errors: ['time'] });
+      
+      const oldCount = Object.keys(employees).length;
+      employees = {};
+      weekStartDate = new Date();
+      saveData();
+      
+      await message.channel.send(`✅ Datos eliminados. ${oldCount} empleado(s) borrados.`);
+    } catch {
+      await message.channel.send('❌ Cancelado.');
+    }
+  }
+  
   // !porcentaje
   if (command === 'porcentaje') {
     if (!message.member.permissions.has(Discord.PermissionFlagsBits.Administrator)) {
@@ -430,18 +548,14 @@ client.on('messageCreate', async (message) => {
   if (command === 'ayuda' || command === 'help') {
     const embed = new Discord.EmbedBuilder()
       .setColor('#00D9FF')
-      .setTitle('📋 Comandos')
+      .setTitle('📋 Comandos del Bot de Bonos')
+      .setDescription('Sistema de cálculo de bonos semanales')
       .addFields(
-        { name: '!test', value: 'Estado del bot' },
-        { name: '!testlog <texto>', value: 'Probar procesamiento' },
-        { name: '!reporte', value: 'Ver reporte actual' },
-        { name: '!leer fecha DD/MM/YYYY', value: '🔒 Leer logs desde fecha' },
-        { name: '!leer cantidad N', value: '🔒 Leer últimos N mensajes' },
-        { name: '!cerrar', value: '🔒 Cerrar semana' },
-        { name: '!porcentaje N', value: '🔒 Cambiar % bono' },
-        { name: '!ayuda', value: 'Este mensaje' }
+        { name: '📊 Consultas', value: '`!test` - Estado\n`!reporte` - Reporte semanal\n`!empleados` - Lista\n`!empleado <DNI>` - Detalle', inline: false },
+        { name: '🔧 Pruebas', value: '`!testlog <texto>` - Probar log', inline: false },
+        { name: '🔒 Admin', value: '`!leer fecha DD/MM/YYYY`\n`!leer cantidad N`\n`!cerrar` - Cerrar semana\n`!porcentaje N`\n`!resetdata`', inline: false }
       )
-      .setFooter({ text: `Bono actual: ${CONFIG.bonusPercentage}%` });
+      .setFooter({ text: `Bono: ${CONFIG.bonusPercentage}% | Semana: Lun-Dom` });
     
     await message.reply({ embeds: [embed] });
   }
@@ -491,7 +605,7 @@ client.once(Discord.Events.ClientReady, async () => {
         { name: '📊 Bono', value: `${CONFIG.bonusPercentage}%`, inline: true },
         { name: '⏰ Cierre', value: 'Dom 23:00', inline: true }
       )
-      .setFooter({ text: 'Usa !ayuda para ver comandos' });
+      .setFooter({ text: 'Usa !ayuda' });
     
     await bonusChannel.send({ embeds: [embed] });
   }
