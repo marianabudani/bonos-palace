@@ -3,6 +3,11 @@ require('dotenv').config();
 const Discord = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
+
+// Servidor HTTP para Render
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 // Configuración desde variables de entorno
 const CONFIG = {
@@ -32,6 +37,26 @@ let employees = {}; // { DNI: { name: string, sales: [] } }
 let weekStartDate = new Date();
 
 const DATA_FILE = path.join(__dirname, 'employees_data.json');
+
+// Endpoint de estado para Render
+app.get('/', (req, res) => {
+  const status = {
+    status: 'online',
+    bot: client.user?.tag || 'Iniciando...',
+    employees: Object.keys(employees).length,
+    uptime: Math.floor(process.uptime()),
+    weekStart: weekStartDate.toISOString()
+  };
+  res.json(status);
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Servidor HTTP en puerto ${PORT}`);
+});
 
 // Cargar datos
 function loadData() {
