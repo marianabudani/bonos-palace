@@ -2,6 +2,10 @@
 //require('dotenv').config();
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config();
+  console.log('🔍 DEBUG - Variables cargadas:');
+  console.log('TOKEN existe:', !!process.env.DISCORD_TOKEN);
+  console.log('LOGS_CHANNEL_ID:', process.env.LOGS_CHANNEL_ID);
+  console.log('BONUS_CHANNEL_ID:', process.env.BONUS_CHANNEL_ID);
 }
 const Discord = require('discord.js');
 const fs = require('fs');
