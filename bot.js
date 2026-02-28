@@ -5,10 +5,6 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 
-// Servidor HTTP para Render
-const app = express();
-const PORT = process.env.PORT || 3000;
-
 // Configuración desde variables de entorno
 const CONFIG = {
   token: process.env.DISCORD_TOKEN,
@@ -21,8 +17,15 @@ const CONFIG = {
 // Validar configuración
 if (!CONFIG.token || !CONFIG.logsChannelId || !CONFIG.bonusChannelId) {
   console.error('❌ ERROR: Faltan variables de entorno requeridas');
+  console.error('TOKEN:', CONFIG.token ? 'OK' : 'FALTA');
+  console.error('LOGS_CHANNEL_ID:', CONFIG.logsChannelId ? 'OK' : 'FALTA');
+  console.error('BONUS_CHANNEL_ID:', CONFIG.bonusChannelId ? 'OK' : 'FALTA');
   process.exit(1);
 }
+
+// Servidor HTTP para Render
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 const client = new Discord.Client({
   intents: [
@@ -33,10 +36,15 @@ const client = new Discord.Client({
 });
 
 // Base de datos
-let employees = {}; // { DNI: { name: string, sales: [] } }
+let employees = {};
 let weekStartDate = new Date();
 
 const DATA_FILE = path.join(__dirname, 'employees_data.json');
+
+// Endpoint de estado para Render
+app.get('/', (req, res) => {
+
+});
 
 // Endpoint de estado para Render
 app.get('/', (req, res) => {
@@ -636,7 +644,19 @@ client.once(Discord.Events.ClientReady, async () => {
   }
 });
 
-client.on('error', error => console.error('Error:', error));
-process.on('unhandledRejection', error => console.error('Error:', error));
+client.on('error', error => {
+  console.error('❌ Error del cliente Discord:', error);
+});
+
+process.on('unhandledRejection', error => {
+  console.error('❌ Error no manejado:', error);
+});
+
+// Conectar a Discord
+console.log('🔌 Conectando a Discord...');
+client.login(CONFIG.token).catch(error => {
+  console.error('❌ Error al conectar con Discord:', error);
+  process.exit(1);
+});
 
 client.login(CONFIG.token);
