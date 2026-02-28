@@ -1,5 +1,8 @@
 // bot.js
-require('dotenv').config();
+//require('dotenv').config();
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 const Discord = require('discord.js');
 const fs = require('fs');
 const path = require('path');
